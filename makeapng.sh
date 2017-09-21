@@ -1,18 +1,24 @@
 #!/bin/bash
 declare -a packages=("ffmpeg" "convert" "apngasm" "pngnq-s9" "mediainfo"); #"libpng16-16"
-#set -v -x
+set -v -x
+declare -x colors
 canvaswidth=1232
 canvasheight=256
 cwd=$(pwd)
 padding=20
-framewidth=384
-noframes=3
+framewidth=300
+rowno=3
+eachrow=3
 lenghtsec=1.5
 fps=10
+OUTPUT=$(basename "${@: -1}")
 
 math ()
 {
-canvaswidth=$((padding+(padding*noframes)+(noframes*framewidth)))
+canvaswidth=$((padding+(padding*eachrow)+(eachrow*framewidth)))
+noframes=$((rowno*eachrow))
+frameheight=$(echo "$framewidth / 1.77777" | bc)
+canvasheight=$((padding+(padding*rowno)+(rowno*frameheight)))
 }
 math
 
@@ -80,19 +86,32 @@ while getopts ":z" opt; do
 	esac
 done
 
+
+if (($# < 1)); then
+	exit
+fi
+test=$(mediainfo --Inform="General;%Duration%" "${@: -1}")
+if ((test=="")); then
+	echo "I need a videooooo"
+fi
+
+
+	
+
 reducesize ()
 {
 framedir=$(basename "$@")
 pngnq-s9 -d "$@" -e .png -f -n "$colors" "$*"*.png
-apngasm "$cwd/$framedir.png" "$*"*.png 1 10 -z2 -i1 &> /dev/null
+apngasm "$cwd/$OUTPUT.png" "$*"*.png 1 10 -z2 -i1 &> /dev/null
 size=$(stat -c%s "$cwd/$framedir.png")
 if [ "$size" -gt 3099999 ]; then
+	echo "Reducing size"
 	colors=$((colors - 20))
 	reducesize "$@"
 fi
 }
 
-makegif ()
+grabvideo ()
 {
 echo "Give me a sec"
 mkdir /tmp/grabs
@@ -106,20 +125,31 @@ for p in /tmp/grabs/1/*; do
 		pics+=("$p")
 	done
 mkdir /tmp/frame
+}
+makegif ()
+{
 for n in "${pics[@]}"; do
 	nu=$(basename "$n")
 	#cp $pngframe "/tmp/frame/frame$nu"
 	convert -size "$canvaswidth"x"$canvasheight" xc:"rgba(0,0,0,0)" PNG32:/tmp/frame/frame"$nu"
-	composite -geometry +20+20 "/tmp/grabs/1/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
-	composite -geometry +424+20 "/tmp/grabs/2/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
-	composite -geometry +828+20 "/tmp/grabs/3/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
+	cur=0
+	for ((rn=0;rn<rowno;rn++)); do
+		for ((i=0;i<eachrow;i++)); do
+			composite -geometry +$((padding+framewidth*i+padding*i))+$((padding+frameheight*rn+padding*rn)) "/tmp/grabs/$((cur+1))/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
+			cur=$((cur+1))
+		done
+	done
+	
+	
+	#composite -geometry +20+20 "/tmp/grabs/1/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
+	#composite -geometry +424+20 "/tmp/grabs/2/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
+	#composite -geometry +828+20 "/tmp/grabs/3/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
 	#composite -geometry +21+304 "/tmp/grabs/4/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
 	#composite -geometry +325+304 "/tmp/grabs/5/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
 	#composite -geometry +641+304 "/tmp/grabs/6/$nu" "/tmp/frame/frame$nu" "/tmp/frame/frame$nu"
 	#convert "/tmp/frame/frame$nu" -gravity center -pointsize 30  -stroke '#000C' -strokewidth 2 -annotate 0 "$base" -pointsize 30 -stroke none -fill white -annotate 0 "$base" -depth 8 /tmp/frame/frame$nu
 	mogrify -path /tmp/frame/ -filter Triangle -define filter:support=2 -thumbnail 1100 -unsharp 0.25x0.08+8.3+0.045 -dither None -posterize 136 -quality 82 -define jpeg:fancy-upsampling=off -define png:compression-filter=5 -define png:compression-level=9 -define png:compression-strategy=1 -define png:exclude-chunk=all -interlace none -colorspace sRGB /tmp/frame/frame"$nu"
 done
-colors=190
 reducesize /tmp/frame/
 rm -rf /tmp/grabs
 rm -rf /tmp/frame
@@ -127,4 +157,10 @@ echo "Done"
 }
 
 math
-makegif "${@: -1}"
+if ((noframes > 6)); then
+	colors=80
+	else
+	colors=190
+fi
+grabvideo "${@: -1}"
+makegif 
