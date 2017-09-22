@@ -1,5 +1,5 @@
 #!/bin/bash
-declare -a packages=("ffmpeg" "convert" "apngasm" "pngnq-s9" "mediainfo");
+declare -a packages=("ffmpeg" "convert" "mediainfo" "bc" "make" "unzip" "gcc" "apngasm" "pngnq-s9");
 declare -a packmans=("apt-get" "yum" "dnf" "pacman");
 
 #set -v -x
@@ -9,7 +9,7 @@ canvasheight=256
 cwd=$(pwd)
 padding=20
 framewidth=300
-rowno=3
+rowno=2
 eachrow=3
 lenghtsec=1.5
 fps=10
@@ -66,6 +66,10 @@ for i in "${packages[@]}"; do
 					if [[ $i == "pngnq-s9" ]]
 						then
 							if [[ $(ldconfig -p | grep libpng16.so.16) == "" ]]
+								then
+								$packetman -y install libpng16-16
+							fi
+							if [[ $(ldconfig -p | grep libpng-dev) == "" ]]
 								then
 								$packetman -y install libpng16-16
 							fi
